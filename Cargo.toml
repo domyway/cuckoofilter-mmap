@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["domyway <weizhao029@gmail.com>"]
 description = "cuckkoo filter use mmap"
-license = "Apache License, Version 2.0"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 memmap2 = "0.9.4"
