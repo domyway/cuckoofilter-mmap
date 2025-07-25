@@ -94,17 +94,12 @@ pub struct CuckooFilter<T: ?Sized> {
 }
 
 /// Defines the flushing strategy for the Cuckoo Filter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FlushMode {
+    #[default]
     None,
     Always,
     AfterNOperations(usize),
-}
-
-impl Default for FlushMode {
-    fn default() -> Self {
-        FlushMode::None
-    }
 }
 
 impl FromStr for FlushMode {
@@ -119,10 +114,14 @@ impl FromStr for FlushMode {
                 if let Ok(n) = num_str.parse::<usize>() {
                     Ok(FlushMode::AfterNOperations(n))
                 } else {
-                    Err(CuckooError::InvalidParameter("Invalid number for AfterNOperations".to_string()))
+                    Err(CuckooError::InvalidParameter(
+                        "Invalid number for AfterNOperations".to_string(),
+                    ))
                 }
             }
-            _ => Err(CuckooError::InvalidParameter("Invalid FlushMode string".to_string())),
+            _ => Err(CuckooError::InvalidParameter(
+                "Invalid FlushMode string".to_string(),
+            )),
         }
     }
 }
@@ -179,15 +178,24 @@ impl CuckooFilterBuilder {
     }
 
     /// Builds the Cuckoo Filter, creating the backing file.
-    pub fn build<P: AsRef<Path>, T: Item + ?Sized>(self, path: P) -> Result<CuckooFilter<T>, CuckooError> {
+    pub fn build<P: AsRef<Path>, T: Item + ?Sized>(
+        self,
+        path: P,
+    ) -> Result<CuckooFilter<T>, CuckooError> {
         if self.bucket_size == 0 {
-            return Err(CuckooError::InvalidParameter("Bucket size cannot be zero".to_string()));
+            return Err(CuckooError::InvalidParameter(
+                "Bucket size cannot be zero".to_string(),
+            ));
         }
         if self.fingerprint_size == 0 {
-            return Err(CuckooError::InvalidParameter("Fingerprint size cannot be zero".to_string()));
+            return Err(CuckooError::InvalidParameter(
+                "Fingerprint size cannot be zero".to_string(),
+            ));
         }
         if self.fingerprint_size > 4 {
-            return Err(CuckooError::InvalidParameter("Fingerprint size cannot be greater than 4".to_string()));
+            return Err(CuckooError::InvalidParameter(
+                "Fingerprint size cannot be greater than 4".to_string(),
+            ));
         }
 
         let mut num_buckets = (self.capacity as f64 / self.bucket_size as f64).ceil() as usize;
@@ -235,7 +243,11 @@ impl<T: ?Sized> CuckooFilter<T> {
 
 impl<T: Item + ?Sized> CuckooFilter<T> {
     /// Opens an existing Cuckoo Filter from a file.
-    pub fn open<P: AsRef<Path>>(path: P, flush_mode: FlushMode, max_kicks: usize) -> Result<Self, CuckooError> {
+    pub fn open<P: AsRef<Path>>(
+        path: P,
+        flush_mode: FlushMode,
+        max_kicks: usize,
+    ) -> Result<Self, CuckooError> {
         let file = OpenOptions::new().read(true).write(true).open(path)?;
         let metadata = file.metadata()?;
         let file_size = metadata.len() as usize;
@@ -290,7 +302,11 @@ impl<T: Item + ?Sized> CuckooFilter<T> {
                 true
             } else {
                 let mut rng = rand::thread_rng();
-                let mut current_index = if rng.gen() { alt_index } else { loc.bucket_index };
+                let mut current_index = if rng.gen() {
+                    alt_index
+                } else {
+                    loc.bucket_index
+                };
 
                 for _ in 0..self.max_kicks {
                     let evicted_fp = self.swap_fingerprint(current_index, &loc.fingerprint);
@@ -408,7 +424,11 @@ impl<T: Item + ?Sized> CuckooFilter<T> {
 
     fn write_to_bucket(&mut self, bucket_index: usize, fingerprint: &[u8]) -> bool {
         for i in 0..self.bucket_size {
-            if self.get_fingerprint(bucket_index, i).iter().all(|&b| b == 0) {
+            if self
+                .get_fingerprint(bucket_index, i)
+                .iter()
+                .all(|&b| b == 0)
+            {
                 self.set_fingerprint(bucket_index, i, fingerprint);
                 return true;
             }
@@ -489,7 +509,11 @@ impl<T: Item + ?Sized> ConcurrentCuckooFilter<T> {
     }
 
     /// Opens an existing thread-safe Cuckoo Filter from a file.
-    pub fn open<P: AsRef<Path>>(path: P, flush_mode: FlushMode, max_kicks: usize) -> Result<Self, CuckooError> {
+    pub fn open<P: AsRef<Path>>(
+        path: P,
+        flush_mode: FlushMode,
+        max_kicks: usize,
+    ) -> Result<Self, CuckooError> {
         let filter = CuckooFilter::open(path, flush_mode, max_kicks)?;
         Ok(Self {
             inner: Arc::new(RwLock::new(filter)),
@@ -515,7 +539,9 @@ impl<T: Item + ?Sized> ConcurrentCuckooFilter<T> {
 
 impl<T: ?Sized> Clone for ConcurrentCuckooFilter<T> {
     fn clone(&self) -> Self {
-        Self { inner: self.inner.clone() }
+        Self {
+            inner: self.inner.clone(),
+        }
     }
 }
 
@@ -528,7 +554,7 @@ mod concurrent_tests {
     fn get_test_file_path(name: &str) -> String {
         format!("/tmp/cuckoo_concurrent_{}.db", name)
     }
-    
+
     #[test]
     fn test_capacity_file_size() {
         let path = get_test_file_path("insert_contains");
@@ -654,7 +680,8 @@ mod tests {
 
         let capacity = 1000;
         {
-            let filter: CuckooFilter<str> = CuckooFilter::<str>::builder(capacity).build(&path).unwrap();
+            let filter: CuckooFilter<str> =
+                CuckooFilter::<str>::builder(capacity).build(&path).unwrap();
             assert_eq!(filter.capacity(), 1024);
             assert_eq!(filter.num_buckets(), 256);
         }
@@ -753,7 +780,9 @@ mod tests {
         let _ = fs::remove_file(&path);
 
         let capacity = 16;
-        let mut filter = CuckooFilter::<String>::builder(capacity).build(&path).unwrap();
+        let mut filter = CuckooFilter::<String>::builder(capacity)
+            .build(&path)
+            .unwrap();
 
         let mut inserted_count = 0;
         for i in 0..100 {

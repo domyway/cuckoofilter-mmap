@@ -1,8 +1,8 @@
-use cuckoofilter_mmap::{CuckooFilter, FlushMode};
+use cuckoofilter_mmap::CuckooFilter;
+use rand::{thread_rng, Rng};
 use std::env;
 use std::fs;
 use std::path::Path;
-use rand::{thread_rng, Rng};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -16,7 +16,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let capacity: usize = capacity_str.parse()?;
 
     let path = Path::new("/tmp").join(format!("cuckoo_fpr_{}.db", capacity));
-    let path_str = path.to_str().unwrap();
 
     // Ensure the file doesn't exist from a previous run
     let _ = fs::remove_file(&path);
@@ -53,8 +52,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let false_positive_rate = false_positives as f64 / num_elements_to_check as f64;
 
-    println!("Capacity: {}, False Positives: {}, Total Checked: {}, FPR: {:.6}",
-             capacity, false_positives, num_elements_to_check, false_positive_rate);
+    println!(
+        "Capacity: {}, False Positives: {}, Total Checked: {}, FPR: {:.6}",
+        capacity, false_positives, num_elements_to_check, false_positive_rate
+    );
 
     // Clean up the file
     fs::remove_file(&path)?;

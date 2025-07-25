@@ -1,10 +1,10 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use cuckoofilter_mmap::{CuckooFilter, ConcurrentCuckooFilter, FlushMode};
+use cuckoofilter_mmap::{ConcurrentCuckooFilter, CuckooFilter, FlushMode};
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::thread;
 use std::sync::Arc;
+use std::thread;
 
 const INSERT_BENCH_ITEMS: usize = 1_000; // Number of items to insert for the insert benchmark
 const CONTAINS_BENCH_ITEMS: usize = 10_000; // Number of items to check for the contains benchmark
@@ -16,7 +16,9 @@ fn setup_filter(capacity: usize) -> (CuckooFilter<String>, String) {
     let path = Path::new("/tmp").join(format!("cuckoo_bench_{}.db", capacity));
     let path_str = path.to_str().unwrap().to_string();
     let _ = fs::remove_file(&path);
-    let filter = CuckooFilter::<String>::builder(capacity).build(&path).unwrap();
+    let filter = CuckooFilter::<String>::builder(capacity)
+        .build(&path)
+        .unwrap();
     (filter, path_str)
 }
 
@@ -24,7 +26,9 @@ fn setup_concurrent_filter(capacity: usize) -> (ConcurrentCuckooFilter<String>, 
     let path = Path::new("/tmp").join(format!("cuckoo_concurrent_bench_{}.db", capacity));
     let path_str = path.to_str().unwrap().to_string();
     let _ = fs::remove_file(&path);
-    let filter = CuckooFilter::<String>::builder(capacity).build(&path).unwrap();
+    let filter = CuckooFilter::<String>::builder(capacity)
+        .build(&path)
+        .unwrap();
     let concurrent_filter = ConcurrentCuckooFilter::new(filter);
     (concurrent_filter, path_str)
 }
@@ -39,7 +43,9 @@ fn run_benchmark(c: &mut Criterion, capacity: usize) {
     // Benchmark insert operation
     group.bench_function("insert", |b| {
         let (mut filter, path_str) = setup_filter(capacity);
-        let items: Vec<String> = (0..INSERT_BENCH_ITEMS).map(|i| format!("insert-item-{}", i)).collect();
+        let items: Vec<String> = (0..INSERT_BENCH_ITEMS)
+            .map(|i| format!("insert-item-{}", i))
+            .collect();
         let mut i = 0;
         b.iter(|| {
             let item = &items[i % INSERT_BENCH_ITEMS];
@@ -52,7 +58,9 @@ fn run_benchmark(c: &mut Criterion, capacity: usize) {
     // Benchmark contains operation
     group.bench_function("contains", |b| {
         let (mut filter, path_str) = setup_filter(capacity);
-        let items: Vec<String> = (0..CONTAINS_BENCH_ITEMS).map(|i| format!("contains-item-{}", i)).collect();
+        let items: Vec<String> = (0..CONTAINS_BENCH_ITEMS)
+            .map(|i| format!("contains-item-{}", i))
+            .collect();
         // Pre-fill the filter with items for contains benchmark
         for item in &items {
             filter.insert(item).unwrap();
@@ -92,38 +100,44 @@ fn run_benchmark(c: &mut Criterion, capacity: usize) {
         });
 
         // Concurrent Contains
-        group.bench_function(format!("concurrent_contains_{}_threads", num_threads), |b| {
-            let (filter, path_str) = setup_concurrent_filter(capacity);
-            let total_items_to_insert = num_threads * CONCURRENT_ITEMS_PER_THREAD;
-            let items_to_check: Vec<String> = (0..total_items_to_insert).map(|i| format!("concurrent-contains-item-{}", i)).collect();
+        group.bench_function(
+            format!("concurrent_contains_{}_threads", num_threads),
+            |b| {
+                let (filter, path_str) = setup_concurrent_filter(capacity);
+                let total_items_to_insert = num_threads * CONCURRENT_ITEMS_PER_THREAD;
+                let items_to_check: Vec<String> = (0..total_items_to_insert)
+                    .map(|i| format!("concurrent-contains-item-{}", i))
+                    .collect();
 
-            // Pre-fill the filter with items for concurrent contains benchmark
-            for item in &items_to_check {
-                filter.insert(item).unwrap();
-            }
-
-            b.iter(|| {
-                let mut handles = vec![];
-                for t_id in 0..num_threads {
-                    let filter_clone = filter.clone();
-                    let items_for_thread: Vec<String> = items_to_check.iter()
-                        .skip(t_id * CONCURRENT_ITEMS_PER_THREAD)
-                        .take(CONCURRENT_ITEMS_PER_THREAD)
-                        .map(|s| s.to_string())
-                        .collect();
-
-                    handles.push(thread::spawn(move || {
-                        for item in items_for_thread {
-                            filter_clone.contains(&item);
-                        }
-                    }));
+                // Pre-fill the filter with items for concurrent contains benchmark
+                for item in &items_to_check {
+                    filter.insert(item).unwrap();
                 }
-                for handle in handles {
-                    handle.join().unwrap();
-                }
-            });
-            cleanup_filter(&path_str);
-        });
+
+                b.iter(|| {
+                    let mut handles = vec![];
+                    for t_id in 0..num_threads {
+                        let filter_clone = filter.clone();
+                        let items_for_thread: Vec<String> = items_to_check
+                            .iter()
+                            .skip(t_id * CONCURRENT_ITEMS_PER_THREAD)
+                            .take(CONCURRENT_ITEMS_PER_THREAD)
+                            .map(|s| s.to_string())
+                            .collect();
+
+                        handles.push(thread::spawn(move || {
+                            for item in items_for_thread {
+                                filter_clone.contains(&item);
+                            }
+                        }));
+                    }
+                    for handle in handles {
+                        handle.join().unwrap();
+                    }
+                });
+                cleanup_filter(&path_str);
+            },
+        );
     }
 
     group.finish();
@@ -135,7 +149,9 @@ fn setup_filter_bytes(capacity: usize) -> (CuckooFilter<[u8; 16]>, String) {
     let path = Path::new("/tmp").join(format!("cuckoo_bench_{}.db", capacity));
     let path_str = path.to_str().unwrap().to_string();
     let _ = fs::remove_file(&path);
-    let filter = CuckooFilter::<[u8; 16]>::builder(capacity).build(&path).unwrap();
+    let filter = CuckooFilter::<[u8; 16]>::builder(capacity)
+        .build(&path)
+        .unwrap();
     (filter, path_str)
 }
 
@@ -143,7 +159,9 @@ fn setup_concurrent_filter_bytes(capacity: usize) -> (ConcurrentCuckooFilter<[u8
     let path = Path::new("/tmp").join(format!("cuckoo_concurrent_bench_{}.db", capacity));
     let path_str = path.to_str().unwrap().to_string();
     let _ = fs::remove_file(&path);
-    let filter = CuckooFilter::<[u8; 16]>::builder(capacity).build(&path).unwrap();
+    let filter = CuckooFilter::<[u8; 16]>::builder(capacity)
+        .build(&path)
+        .unwrap();
     let concurrent_filter = ConcurrentCuckooFilter::new(filter);
     (concurrent_filter, path_str)
 }
