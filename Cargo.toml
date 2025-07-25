@@ -2,6 +2,7 @@
 name = "cuckoofilter-mmap"
 version = "0.1.0"
 edition = "2021"
+authors = ["domyway <weizhao029@gmail.com>"]
 
 [dependencies]
 memmap2 = "0.9.4"
