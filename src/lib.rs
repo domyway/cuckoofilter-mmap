@@ -100,6 +100,8 @@ pub enum FlushMode {
     None,
     Always,
     AfterNOperations(usize),
+    AlwaysAsync,
+    AfterNOperationsAsync(usize),
 }
 
 impl FromStr for FlushMode {
@@ -109,6 +111,7 @@ impl FromStr for FlushMode {
         match s.to_lowercase().as_str() {
             "none" => Ok(FlushMode::None),
             "always" => Ok(FlushMode::Always),
+            "always_async" => Ok(FlushMode::AlwaysAsync),
             s if s.starts_with("after:") => {
                 let num_str = s.trim_start_matches("after:");
                 if let Ok(n) = num_str.parse::<usize>() {
@@ -116,6 +119,16 @@ impl FromStr for FlushMode {
                 } else {
                     Err(CuckooError::InvalidParameter(
                         "Invalid number for AfterNOperations".to_string(),
+                    ))
+                }
+            }
+            s if s.starts_with("after_async:") => {
+                let num_str = s.trim_start_matches("after_async:");
+                if let Ok(n) = num_str.parse::<usize>() {
+                    Ok(FlushMode::AfterNOperationsAsync(n))
+                } else {
+                    Err(CuckooError::InvalidParameter(
+                        "Invalid number for AfterNOperationsAsync".to_string(),
                     ))
                 }
             }
@@ -474,6 +487,18 @@ impl<T: Item + ?Sized> CuckooFilter<T> {
                 }
                 Ok(())
             }
+            FlushMode::AlwaysAsync => {
+                self.mmap.flush_async()?;
+                Ok(())
+            }
+            FlushMode::AfterNOperationsAsync(n) => {
+                self.op_count += 1;
+                if self.op_count >= n {
+                    self.mmap.flush_async()?;
+                    self.op_count = 0;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -538,6 +563,10 @@ impl<T: Item + ?Sized> ConcurrentCuckooFilter<T> {
 
     pub fn flush(&self) -> io::Result<()> {
         self.inner.read().unwrap().flush()
+    }
+
+    pub fn flush_async(&self) -> io::Result<()> {
+        self.inner.read().unwrap().flush_async()
     }
 }
 
@@ -855,5 +884,66 @@ mod tests {
         }
 
         fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn test_flush_always_async() {
+        setup();
+        let path = get_test_file_path("flush_always_async");
+        let _ = fs::remove_file(&path);
+
+        let mut filter = CuckooFilter::<String>::builder(100)
+            .flush_mode(FlushMode::AlwaysAsync)
+            .build(&path)
+            .unwrap();
+
+        filter.insert(&"test_item".to_string()).unwrap();
+
+        // Verify data persists after async flush
+        let reopened_filter = CuckooFilter::<String>::open(&path, FlushMode::None, 500).unwrap();
+        assert!(reopened_filter.contains(&"test_item".to_string()));
+
+        fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn test_flush_after_n_operations_async() {
+        setup();
+        let path = get_test_file_path("flush_after_n_async");
+        let _ = fs::remove_file(&path);
+
+        let n = 3;
+        let mut filter = CuckooFilter::<String>::builder(100)
+            .flush_mode(FlushMode::AfterNOperationsAsync(n))
+            .build(&path)
+            .unwrap();
+
+        for i in 0..n - 1 {
+            filter.insert(&format!("item-{}", i)).unwrap();
+        }
+        assert_eq!(filter.op_count, n - 1);
+
+        filter.insert(&format!("item-{}", n - 1)).unwrap();
+        assert_eq!(filter.op_count, 0);
+
+        let reopened_filter = CuckooFilter::<String>::open(&path, FlushMode::None, 500).unwrap();
+        for i in 0..n {
+            assert!(reopened_filter.contains(&format!("item-{}", i)));
+        }
+
+        fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn test_flush_mode_from_str() {
+        assert_eq!(FlushMode::from_str("none").unwrap(), FlushMode::None);
+        assert_eq!(FlushMode::from_str("always").unwrap(), FlushMode::Always);
+        assert_eq!(FlushMode::from_str("always_async").unwrap(), FlushMode::AlwaysAsync);
+        assert_eq!(FlushMode::from_str("after:5").unwrap(), FlushMode::AfterNOperations(5));
+        assert_eq!(FlushMode::from_str("after_async:10").unwrap(), FlushMode::AfterNOperationsAsync(10));
+
+        assert!(FlushMode::from_str("invalid").is_err());
+        assert!(FlushMode::from_str("after:invalid").is_err());
+        assert!(FlushMode::from_str("after_async:invalid").is_err());
     }
 }
