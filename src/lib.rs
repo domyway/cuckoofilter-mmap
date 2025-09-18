@@ -360,6 +360,10 @@ impl<T: Item + ?Sized> CuckooFilter<T> {
         self.mmap.flush()
     }
 
+    pub fn flush_async(&self) -> io::Result<()> {
+        self.mmap.flush_async()
+    }
+
     pub fn num_buckets(&self) -> usize {
         self.num_buckets
     }
