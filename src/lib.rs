@@ -152,6 +152,7 @@ pub struct CuckooFilterBuilder {
     bucket_size: usize,
     max_kicks: usize,
     flush_mode: FlushMode,
+    populate: bool,
 }
 
 impl CuckooFilterBuilder {
@@ -163,6 +164,7 @@ impl CuckooFilterBuilder {
             bucket_size: 4,
             max_kicks: 500,
             flush_mode: FlushMode::None,
+            populate: true,
         }
     }
 
@@ -187,6 +189,12 @@ impl CuckooFilterBuilder {
     /// Sets the flush mode for the filter.
     pub fn flush_mode(mut self, mode: FlushMode) -> Self {
         self.flush_mode = mode;
+        self
+    }
+
+    /// Sets whether to pre-populate the memory map.
+    pub fn populate(mut self, populate: bool) -> Self {
+        self.populate = populate;
         self
     }
 
@@ -228,7 +236,11 @@ impl CuckooFilterBuilder {
 
         file.set_len(file_size as u64)?;
 
-        let mut mmap = unsafe { MmapOptions::new().populate().map_mut(&file)? };
+        let mut mmap_options = MmapOptions::new();
+        if self.populate {
+            mmap_options.populate();
+        }
+        let mut mmap = unsafe { mmap_options.map_mut(&file)? };
 
         // Write metadata
         mmap[0..2].copy_from_slice(&(self.fingerprint_size as u16).to_be_bytes());
@@ -260,6 +272,7 @@ impl<T: Item + ?Sized> CuckooFilter<T> {
         path: P,
         flush_mode: FlushMode,
         max_kicks: usize,
+        populate: bool,
     ) -> Result<Self, CuckooError> {
         let file = OpenOptions::new().read(true).write(true).open(path)?;
         let metadata = file.metadata()?;
@@ -269,7 +282,11 @@ impl<T: Item + ?Sized> CuckooFilter<T> {
             return Err(CuckooError::InvalidFileFormat);
         }
 
-        let mmap = unsafe { MmapOptions::new().populate().map_mut(&file)? };
+        let mut mmap_options = MmapOptions::new();
+        if populate {
+            mmap_options.populate();
+        }
+        let mmap = unsafe { mmap_options.map_mut(&file)? };
 
         let fingerprint_size = u16::from_be_bytes(mmap[0..2].try_into().unwrap()) as usize;
         let bucket_size = u16::from_be_bytes(mmap[2..4].try_into().unwrap()) as usize;
@@ -542,8 +559,9 @@ impl<T: Item + ?Sized> ConcurrentCuckooFilter<T> {
         path: P,
         flush_mode: FlushMode,
         max_kicks: usize,
+        populate: bool,
     ) -> Result<Self, CuckooError> {
-        let filter = CuckooFilter::open(path, flush_mode, max_kicks)?;
+        let filter = CuckooFilter::open(path, flush_mode, max_kicks, populate)?;
         Ok(Self {
             inner: Arc::new(RwLock::new(filter)),
         })
@@ -590,9 +608,9 @@ mod concurrent_tests {
 
     #[test]
     fn test_capacity_file_size() {
-        let path = get_test_file_path("insert_contains");
+        let path = get_test_file_path("capacity_file_size");
         let _ = fs::remove_file(&path);
-        let filter: CuckooFilter<String> = CuckooFilter::<String>::builder(50000000)
+        let _filter: CuckooFilter<String> = CuckooFilter::<String>::builder(50000000)
             .build(&path)
             .unwrap();
     }
@@ -720,7 +738,7 @@ mod tests {
         }
 
         {
-            let filter = CuckooFilter::<str>::open(&path, FlushMode::None, 500).unwrap();
+            let filter = CuckooFilter::<str>::open(&path, FlushMode::None, 500, true).unwrap();
             assert_eq!(filter.capacity(), 1024);
             assert_eq!(filter.num_buckets(), 256);
         }
@@ -788,7 +806,7 @@ mod tests {
         }
 
         {
-            let mut filter = CuckooFilter::<str>::open(&path, FlushMode::None, 500).unwrap();
+            let mut filter = CuckooFilter::<str>::open(&path, FlushMode::None, 500, true).unwrap();
             assert!(filter.contains(item1));
             assert!(filter.contains(item2));
             assert!(!filter.contains("not_present"));
@@ -798,7 +816,7 @@ mod tests {
         }
 
         {
-            let filter = CuckooFilter::<str>::open(&path, FlushMode::None, 500).unwrap();
+            let filter = CuckooFilter::<str>::open(&path, FlushMode::None, 500, true).unwrap();
             assert!(!filter.contains(item1));
             assert!(filter.contains(item2));
         }
@@ -878,7 +896,7 @@ mod tests {
         filter.insert(&format!("item-{}", n - 1)).unwrap();
         assert_eq!(filter.op_count, 0);
 
-        let reopened_filter = CuckooFilter::<String>::open(&path, FlushMode::None, 500).unwrap();
+        let reopened_filter = CuckooFilter::<String>::open(&path, FlushMode::None, 500, true).unwrap();
         for i in 0..n {
             assert!(reopened_filter.contains(&format!("item-{}", i)));
         }
@@ -900,7 +918,7 @@ mod tests {
         filter.insert(&"test_item".to_string()).unwrap();
 
         // Verify data persists after async flush
-        let reopened_filter = CuckooFilter::<String>::open(&path, FlushMode::None, 500).unwrap();
+        let reopened_filter = CuckooFilter::<String>::open(&path, FlushMode::None, 500, true).unwrap();
         assert!(reopened_filter.contains(&"test_item".to_string()));
 
         fs::remove_file(&path).unwrap();
@@ -926,7 +944,7 @@ mod tests {
         filter.insert(&format!("item-{}", n - 1)).unwrap();
         assert_eq!(filter.op_count, 0);
 
-        let reopened_filter = CuckooFilter::<String>::open(&path, FlushMode::None, 500).unwrap();
+        let reopened_filter = CuckooFilter::<String>::open(&path, FlushMode::None, 500, true).unwrap();
         for i in 0..n {
             assert!(reopened_filter.contains(&format!("item-{}", i)));
         }
