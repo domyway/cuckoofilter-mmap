@@ -896,7 +896,8 @@ mod tests {
         filter.insert(&format!("item-{}", n - 1)).unwrap();
         assert_eq!(filter.op_count, 0);
 
-        let reopened_filter = CuckooFilter::<String>::open(&path, FlushMode::None, 500, true).unwrap();
+        let reopened_filter =
+            CuckooFilter::<String>::open(&path, FlushMode::None, 500, true).unwrap();
         for i in 0..n {
             assert!(reopened_filter.contains(&format!("item-{}", i)));
         }
@@ -918,7 +919,8 @@ mod tests {
         filter.insert(&"test_item".to_string()).unwrap();
 
         // Verify data persists after async flush
-        let reopened_filter = CuckooFilter::<String>::open(&path, FlushMode::None, 500, true).unwrap();
+        let reopened_filter =
+            CuckooFilter::<String>::open(&path, FlushMode::None, 500, true).unwrap();
         assert!(reopened_filter.contains(&"test_item".to_string()));
 
         fs::remove_file(&path).unwrap();
@@ -944,7 +946,8 @@ mod tests {
         filter.insert(&format!("item-{}", n - 1)).unwrap();
         assert_eq!(filter.op_count, 0);
 
-        let reopened_filter = CuckooFilter::<String>::open(&path, FlushMode::None, 500, true).unwrap();
+        let reopened_filter =
+            CuckooFilter::<String>::open(&path, FlushMode::None, 500, true).unwrap();
         for i in 0..n {
             assert!(reopened_filter.contains(&format!("item-{}", i)));
         }
@@ -956,9 +959,18 @@ mod tests {
     fn test_flush_mode_from_str() {
         assert_eq!(FlushMode::from_str("none").unwrap(), FlushMode::None);
         assert_eq!(FlushMode::from_str("always").unwrap(), FlushMode::Always);
-        assert_eq!(FlushMode::from_str("always_async").unwrap(), FlushMode::AlwaysAsync);
-        assert_eq!(FlushMode::from_str("after:5").unwrap(), FlushMode::AfterNOperations(5));
-        assert_eq!(FlushMode::from_str("after_async:10").unwrap(), FlushMode::AfterNOperationsAsync(10));
+        assert_eq!(
+            FlushMode::from_str("always_async").unwrap(),
+            FlushMode::AlwaysAsync
+        );
+        assert_eq!(
+            FlushMode::from_str("after:5").unwrap(),
+            FlushMode::AfterNOperations(5)
+        );
+        assert_eq!(
+            FlushMode::from_str("after_async:10").unwrap(),
+            FlushMode::AfterNOperationsAsync(10)
+        );
 
         assert!(FlushMode::from_str("invalid").is_err());
         assert!(FlushMode::from_str("after:invalid").is_err());
